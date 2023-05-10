@@ -3,6 +3,6 @@ This project is written in assembly language for x86 linked with Irvine Library.
 
 # **Output**
 <pre>
-[https://youtu.be/2pizsEKHbJU](https://youtu.be/NC6vwg5ld2M)
+https://youtu.be/NC6vwg5ld2M
 </pre>
 <br/><br/>
