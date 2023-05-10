@@ -1,0 +1,1615 @@
+Microsoft (R) Macro Assembler Version 14.35.32217.1	    04/28/23 00:29:49
+main.asm						     Page 1 - 1
+
+
+				; Calculator
+				COMMENT !
+				features : Operates 4 digits by default (no decimal) addition/subtraction/multiplication/division
+				         : You can change the digits up to 10:) but divide only works at 4 digit:<
+				         : limit only the valid inputs which are numbers and operations
+				         : Will show error if overflow or any logic error
+				         : You can do backspace if you made typo
+				         : You can change the operation if you pressed wrong operation (you won't lose your first input)
+				         : Press escape to refresh the program
+				!
+
+				; Author : Phyo Thant
+				; Creation Date : 4/17/2023
+				; Modify Date : 4/27/2023
+
+				INCLUDE Irvine32.inc 
+			      C ; Include file for Irvine32.lib             (Irvine32.inc)
+			      C 
+			      C ;OPTION CASEMAP:NONE		; optional: make identifiers case-sensitive
+			      C 
+			      C INCLUDE SmallWin.inc		; MS-Windows prototypes, structures, and constants
+			      C .NOLIST
+			      C .LIST
+			      C 
+			      C INCLUDE VirtualKeys.inc
+			      C ; VirtualKeys.inc
+			      C .NOLIST
+			      C .LIST
+			      C 
+			      C 
+			      C .NOLIST
+			      C .LIST
+			      C 
+
+				.386
+				.model flat, stdcall
+main.asm(19) : warning A4011:multiple .MODEL directives found : .MODEL ignored
+				.stack 4096
+				ExitProcess PROTO, dwExitCode: DWORD
+
+ 00000000			.data
+ = 00000004			    digits = 4 ; global variable to change digit
+				    
+ 00000000			.code
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; ////////////////////////////////////// PRINTS ////////////////////////////////////////////////
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; // Print function
+ 00000000			print_calculator PROC
+ 00000000			    .data
+ 00000000 2D 2D 2D 2D 2D	        row1 BYTE "-----------", 0Dh, 0Ah, 0
+	   2D 2D 2D 2D 2D
+	   2D 0D 0A 00
+ 0000000E 7C 31 7C 32 7C	        row2 BYTE "|1|2|3| |+|", 0Dh, 0Ah, 0
+	   33 7C 20 7C 2B
+	   7C 0D 0A 00
+ 0000001C 7C 34 7C 35 7C	        row3 BYTE "|4|5|6| |-|", 0Dh, 0Ah, 0
+	   36 7C 20 7C 2D
+	   7C 0D 0A 00
+ 0000002A 7C 37 7C 38 7C	        row4 BYTE "|7|8|9| |*|", 0Dh, 0Ah, 0
+	   39 7C 20 7C 2A
+	   7C 0D 0A 00
+ 00000038 20 20 7C 30 7C	        row5 BYTE "  |0|=| |/|", 0Dh, 0Ah, 0
+	   3D 7C 20 7C 2F
+	   7C 0D 0A 00
+ 00000000			    .code
+ 00000000  B2 00		        mov dl, 0
+ 00000002  B6 01		        mov dh, 1
+ 00000004  E8 00000000 E	        call Gotoxy
+ 00000009  BA 00000000 R	        mov edx, OFFSET row1
+ 0000000E  E8 00000000 E	        call WriteString
+ 00000013  BA 0000000E R	        mov edx, OFFSET row2
+ 00000018  E8 00000000 E	        call WriteString
+ 0000001D  BA 0000001C R	        mov edx, OFFSET row3
+ 00000022  E8 00000000 E	        call WriteString
+ 00000027  BA 0000002A R	        mov edx, OFFSET row4
+ 0000002C  E8 00000000 E	        call WriteString
+ 00000031  BA 00000038 R	        mov edx, OFFSET row5
+ 00000036  E8 00000000 E	        call WriteString
+ 0000003B  C3			    ret
+ 0000003C			print_calculator ENDP
+
+				; // prints the buffer in specific location
+ 0000003C			print_buffer PROC
+ 0000003C  E8 00000046		    call print_space
+
+ 00000041  B2 06		    mov dl, 10 - digits
+ 00000043  B6 00		    mov dh, 0
+ 00000045  E8 00000000 E	    call Gotoxy
+				     
+ 0000004A  BA 00000046 R	    mov edx, OFFSET buffer
+ 0000004F  E8 00000000 E	    call WriteString
+ 00000054  C3			    ret
+ 00000055			print_buffer ENDP
+
+				; // prints the saved result
+ 00000055			print_save PROC
+ 00000055  E8 0000002D		    call print_space
+
+ 0000005A  B2 06		    mov dl, 10 - digits
+ 0000005C  B6 00		    mov dh, 0
+ 0000005E  E8 00000000 E	    call Gotoxy
+				     
+ 00000063  BA 0000004F R	    mov edx, OFFSET save
+ 00000068  E8 00000000 E	    call WriteString
+ 0000006D  C3			    ret
+ 0000006E			print_save ENDP
+
+				; // print error when out of range
+ 0000006E			print_error PROC
+ 0000006E  E8 00000014		    call print_space
+
+ 00000073  B2 03		    mov dl, 3
+ 00000075  B6 00		    mov dh, 0
+ 00000077  E8 00000000 E	    call Gotoxy
+
+ 0000007C  BA 0000005F R	    mov edx, OFFSET error_text
+ 00000081  E8 00000000 E	    call WriteString
+ 00000086  C3			    ret
+ 00000087			print_error ENDP
+
+				; // this is for beauty
+ 00000087			print_space PROC
+ 00000087  BA 00000000		    mov edx, 0
+ 0000008C  E8 00000000 E	    call Gotoxy
+
+ 00000091  BA 00000069 R	    mov edx, OFFSET space_text
+ 00000096  E8 00000000 E	    call WriteString
+ 0000009B  C3			    ret
+ 0000009C			print_space ENDP
+
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; /////////////////////////////////////// CONTROLS /////////////////////////////////////////////
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; // set flag checking al
+ 0000009C			set_flag PROC uses eax ebx edx
+ 0000009C  50		   *	    push   eax
+ 0000009D  53		   *	    push   ebx
+ 0000009E  52		   *	    push   edx
+				    .IF al == '+'
+ 0000009F  3C 2B	   *	    cmp    al, '+'
+ 000000A1  75 09	   *	    jne    @C0001
+ 000000A3  C6 05 00000058 R	        mov _add, 1
+	   01
+				    .ELSEIF al == '-'
+ 000000AA  EB 25	   *	    jmp    @C0003
+ 000000AC		   *@C0001:
+ 000000AC  3C 2D	   *	    cmp    al, '-'
+ 000000AE  75 09	   *	    jne    @C0004
+ 000000B0  C6 05 00000059 R	        mov _sub, 1
+	   01
+				    .ELSEIF al == '*'
+ 000000B7  EB 18	   *	    jmp    @C0006
+ 000000B9		   *@C0004:
+ 000000B9  3C 2A	   *	    cmp    al, '*'
+ 000000BB  75 09	   *	    jne    @C0007
+ 000000BD  C6 05 0000005A R	        mov _mul, 1
+	   01
+				    .ELSEIF al == '/'
+ 000000C4  EB 0B	   *	    jmp    @C0009
+ 000000C6		   *@C0007:
+ 000000C6  3C 2F	   *	    cmp    al, '/'
+ 000000C8  75 07	   *	    jne    @C000A
+ 000000CA  C6 05 0000005B R	        mov _div, 1
+	   01
+				    .ENDIF
+ 000000D1		   *@C000A:
+ 000000D1		   *@C0009:
+ 000000D1		   *@C0006:
+ 000000D1		   *@C0003:
+				    ret
+ 000000D1  5A		   *	    pop    edx
+ 000000D2  5B		   *	    pop    ebx
+ 000000D3  58		   *	    pop    eax
+ 000000D4  C3		   *	    ret    00000h
+ 000000D5			set_flag ENDP
+
+				; // clear all _add/_sub/_mul/_div
+ 000000D5			clear_flags PROC uses eax ebx edx
+ 000000D5  50		   *	    push   eax
+ 000000D6  53		   *	    push   ebx
+ 000000D7  52		   *	    push   edx
+ 000000D8  C6 05 00000058 R	    mov _add, 0
+	   00
+ 000000DF  C6 05 00000059 R	    mov _sub, 0
+	   00
+ 000000E6  C6 05 0000005A R	    mov _mul, 0
+	   00
+ 000000ED  C6 05 0000005B R	    mov _div, 0
+	   00
+				    ret
+ 000000F4  5A		   *	    pop    edx
+ 000000F5  5B		   *	    pop    ebx
+ 000000F6  58		   *	    pop    eax
+ 000000F7  C3		   *	    ret    00000h
+ 000000F8			clear_flags ENDP
+
+				; // clear the buffer
+ 000000F8			clear_buffer PROC
+ 000000F8  BE 00000046 R	    mov esi, OFFSET buffer
+ 000000FD  B9 00000004		    mov ecx, digits
+				    
+ 00000102			    L6:
+ 00000102  C6 06 30		        mov BYTE PTR [esi], '0'
+ 00000105  46			        inc esi
+ 00000106  E2 FA		    loop L6
+ 00000108  C7 05 0000004B R	    mov count, 0
+	   00000000
+ 00000112  C3			    ret
+ 00000113			clear_buffer ENDP
+
+				; // clear the save
+ 00000113			clear_save PROC
+ 00000113  BE 0000004F R	    mov esi, OFFSET save
+ 00000118  B9 00000004		    mov ecx, digits
+				    
+ 0000011D			    L7:
+ 0000011D  C6 06 30		        mov BYTE PTR [esi], '0'
+ 00000120  46			        inc esi
+ 00000121  E2 FA		    loop L7
+ 00000123  C7 05 00000054 R	    mov save_count, 0
+	   00000000
+ 0000012D  C3			    ret
+ 0000012E			clear_save ENDP
+
+				; // clear the y
+ 0000012E			clear_y PROC
+ 0000012E  BE 00000076 R	    mov esi, OFFSET y
+ 00000133  B9 00000004		    mov ecx, digits
+				    
+ 00000138			    L12:
+ 00000138  C6 06 00		        mov BYTE PTR [esi], 0
+ 0000013B  46			        inc esi
+ 0000013C  E2 FA		    loop L12
+ 0000013E  C3			    ret
+ 0000013F			clear_y ENDP
+
+				; // clear the res
+ 0000013F			clear_res PROC
+ 0000013F  BE 0000007B R	    mov esi, OFFSET res
+ 00000144  B9 00000004		    mov ecx, digits
+				    
+ 00000149			    L13:
+ 00000149  C6 06 00		        mov BYTE PTR [esi], 0
+ 0000014C  46			        inc esi
+ 0000014D  E2 FA		    loop L13
+ 0000014F  C7 05 00000065 R	    mov temp_count, 0
+	   00000000
+ 00000159  C3			    ret
+ 0000015A			clear_res ENDP
+
+				; // this function copoies from res(unpack) to save(ascii)
+ 0000015A			copy_rs PROC
+ 0000015A  C7 05 00000054 R	    mov save_count, 0
+	   00000000
+ 00000164  BE 0000007B R	    mov esi, OFFSET res
+ 00000169  BF 0000004F R	    mov edi, OFFSET save
+ 0000016E  B9 00000004		    mov ecx, digits
+ 00000173			    L14:
+ 00000173  8A 06		        mov al, BYTE PTR [esi]
+ 00000175  0C 30		        or al, 30h
+				        .IF al != '0'
+ 00000177  3C 30	   *	    cmp    al, '0'
+ 00000179  74 06	   *	    je	@C000C
+ 0000017B  FF 05 00000054 R	            inc save_count
+				        .ENDIF
+ 00000181		   *@C000C:
+ 00000181  88 07		        mov BYTE PTR [edi], al
+				        
+ 00000183  46			        inc esi
+ 00000184  47			        inc edi
+ 00000185  E2 EC		    loop L14
+ 00000187  C3			    ret
+ 00000188			copy_rs ENDP
+
+				; // this function copies from save to buffer
+ 00000188			copy_sb PROC
+ 00000188  8B 0D 00000054 R	    mov ecx, save_count
+ 0000018E  89 0D 0000004B R	    mov count, ecx ; copy the size first
+
+ 00000194  BE 0000004F R	    mov esi, OFFSET save
+ 00000199  BF 00000046 R	    mov edi, OFFSET buffer
+ 0000019E  B9 00000004		    mov ecx, digits
+ 000001A3			    L9:
+ 000001A3  8A 06		        mov al, BYTE PTR [esi]
+ 000001A5  88 07		        mov BYTE PTR [edi], al
+				        
+ 000001A7  46			        inc esi
+ 000001A8  47			        inc edi
+ 000001A9  E2 F8		    loop L9
+ 000001AB  C3			    ret
+ 000001AC			copy_sb ENDP
+
+ 000001AC			update_save_count PROC
+ 000001AC  C7 05 00000054 R	    mov save_count, 0
+	   00000000
+ 000001B6  BE 0000004F R	    mov esi, OFFSET save
+ 000001BB  B9 00000004		    mov ecx, digits
+ 000001C0			    L18:
+ 000001C0  8A 06		        mov al, BYTE PTR [esi]
+				        .IF al != '0' && f_temp2 == 1
+ 000001C2  3C 30	   *	    cmp    al, '0'
+ 000001C4  74 10	   *	    je	@C000E
+ 000001C6  80 3D 0000005E R
+	   01		   *	    cmp    f_temp2, 001h
+ 000001CD  75 07	   *	    jne    @C000E
+ 000001CF  C6 05 0000005E R	            mov f_temp2, 0
+	   00
+				        .ENDIF
+ 000001D6		   *@C000E:
+				        .IF f_temp2 == 0
+ 000001D6  80 3D 0000005E R
+	   00		   *	    cmp    f_temp2, 000h
+ 000001DD  75 06	   *	    jne    @C0011
+ 000001DF  FF 05 00000054 R	            inc save_count
+				        .ENDIF
+ 000001E5		   *@C0011:
+ 000001E5  46			        inc esi
+ 000001E6  E2 D8		    loop L18
+ 000001E8  C6 05 0000005E R	    mov f_temp2, 1 ; reset the flag
+	   01
+ 000001EF  C3			    ret
+ 000001F0			update_save_count ENDP
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; ///////////////////////////// USER INTERFACE AND INPUT PARTS /////////////////////////////////
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; // Gets the user input and call add, sub, mul, div
+ 000001F0			user_input PROC
+ 00000046			    .data
+				        ; ///////// IMPORTANT VARIABLES ////////////
+ 00000046  00000004 [		        buffer BYTE digits DUP('0'), 0
+	    30
+	   ] 00
+ 0000004B 00000000		        count DWORD 0
+ 0000004F  00000004 [		        save BYTE digits DUP ('0'), 0
+	    30
+	   ] 00
+ 00000054 00000000		        save_count DWORD 0
+				        ; //////////////// FLAGS ///////////////////
+ 00000058 00			        _add BYTE 0
+ 00000059 00			        _sub BYTE 0
+ 0000005A 00			        _mul BYTE 0
+ 0000005B 00			        _div BYTE 0
+ 0000005C 00			        op_error BYTE 0 ; operation error
+ 0000005D 01			        f_temp1 BYTE 1 ; flag
+ 0000005E 01			        f_temp2 BYTE 1 ; flag
+				        ; ///////////// TEXT /////////////////////// 
+ 0000005F 45 52 52 4F 52	        error_text BYTE "ERROR", 0
+	   00
+ 00000065 00000000		        temp_count DWORD 0 ; put it here just in case assembly acts stupid
+ 00000069 20 20 20 20 20	        space_text BYTE "          ", 0
+	   20 20 20 20 20
+	   00
+				        ; //////////// OPERATION ///////////////////
+ 00000074 00			        carry BYTE 0
+ 00000075 00			        x BYTE 0
+ 00000076  00000004 [		        y BYTE digits DUP(0), 0
+	    00
+	   ] 00
+ 0000007B  00000004 [		        res BYTE digits DUP(0), 0
+	    00
+	   ] 00
+ 000001F0			    .code
+ 000001F0  E8 FFFFFE47		         call print_buffer
+
+ 000001F5			         L1:
+ 000001F5  B8 00000032		            mov eax, 50
+ 000001FA  E8 00000000 E	            call Delay
+
+ 000001FF  E8 00000000 E	            call ReadKey
+ 00000204  74 EF		            jz L1
+
+				            .IF al == '+' || al == '-' || al == '*' || al == '/' ; if these operations were pressed then save the buffer
+ 00000206  3C 2B	   *	    cmp    al, '+'
+ 00000208  74 0C	   *	    je	@C0014
+ 0000020A  3C 2D	   *	    cmp    al, '-'
+ 0000020C  74 08	   *	    je	@C0014
+ 0000020E  3C 2A	   *	    cmp    al, '*'
+ 00000210  74 04	   *	    je	@C0014
+ 00000212  3C 2F	   *	    cmp    al, '/'
+ 00000214  75 07	   *	    jne    @C0013
+ 00000216		   *@C0014:
+ 00000216  E8 000000C7		                call save_buffer
+				            .ELSEIF al == '=' || dx == VK_RETURN; check the operator flags and see which operation to do
+ 0000021B  EB 23	   *	    jmp    @C0018
+ 0000021D		   *@C0013:
+ 0000021D  3C 3D	   *	    cmp    al, '='
+ 0000021F  74 06	   *	    je	@C001A
+ 00000221  66| 83 FA 0D	   *	    cmp    dx, VK_RETURN
+ 00000225  75 07	   *	    jne    @C0019
+ 00000227		   *@C001A:
+ 00000227  E8 0000019A		                call operate
+				            .ELSEIF dx == VK_ESCAPE ; escape will refresh everything including buffer/save/counts/operastor flags
+ 0000022C  EB 12	   *	    jmp    @C001C
+ 0000022E		   *@C0019:
+ 0000022E  66| 83 FA 1B	   *	    cmp    dx, VK_ESCAPE
+ 00000232  75 07	   *	    jne    @C001D
+ 00000234  E8 0000014B		                call refresh
+				            .ELSE
+ 00000239  EB 05	   *	    jmp    @C001F
+ 0000023B		   *@C001D:
+ 0000023B  E8 00000003		                call update ; this updates the buffer
+				            .ENDIF
+ 00000240		   *@C001F:
+ 00000240		   *@C001C:
+ 00000240		   *@C0018:
+
+ 00000240  EB B3		            jmp L1
+ 00000242  C3			    ret
+ 00000243			user_input ENDP
+
+				; // change buffer
+ 00000243			update PROC uses eax ebx edx
+ 00000243  50		   *	    push   eax
+ 00000244  53		   *	    push   ebx
+ 00000245  52		   *	    push   edx
+				    .IF op_error == 1
+ 00000246  80 3D 0000005C R
+	   01		   *	    cmp    op_error, 001h
+ 0000024D  75 07	   *	    jne    @C0020
+ 0000024F  E9 0000008A		        jmp opError1
+				    .ELSEIF _add == 1 || _sub == 1 || _mul == 1 || _div == 1
+ 00000254  EB 2B	   *	    jmp    @C0022
+ 00000256		   *@C0020:
+ 00000256  80 3D 00000058 R
+	   01		   *	    cmp    _add, 001h
+ 0000025D  74 1B	   *	    je	@C0024
+ 0000025F  80 3D 00000059 R
+	   01		   *	    cmp    _sub, 001h
+ 00000266  74 12	   *	    je	@C0024
+ 00000268  80 3D 0000005A R
+	   01		   *	    cmp    _mul, 001h
+ 0000026F  74 09	   *	    je	@C0024
+ 00000271  80 3D 0000005B R
+	   01		   *	    cmp    _div, 001h
+ 00000278  75 07	   *	    jne    @C0023
+ 0000027A		   *@C0024:
+ 0000027A  C6 05 0000005D R	        mov f_temp1, 0
+	   00
+				    .ENDIF
+ 00000281		   *@C0023:
+ 00000281		   *@C0022:
+ 00000281  BB 00000004		    mov ebx, digits ; this will stores the number of digits
+ 00000286  4B			    dec ebx
+
+ 00000287  66| 83 FA 08		    cmp dx, VK_BACK
+ 0000028B  75 25		    jne skip
+ 0000028D  83 3D 0000004B R	    cmp count, 0
+	   00
+ 00000294  74 43		    je done
+
+ 00000296  FF 0D 0000004B R	    dec count
+ 0000029C  BE 00000046 R	    mov esi, OFFSET buffer
+ 000002A1  03 F3		    add esi, ebx ; this will point esi to the last one
+ 000002A3  8B CB		    mov ecx, ebx ; this is for the number of loops
+ 000002A5			    L2:
+ 000002A5  8A 5E FF		        mov bl, BYTE PTR [esi - 1]
+ 000002A8  88 1E		        mov BYTE PTR [esi], bl
+ 000002AA  4E			        dec esi
+ 000002AB  E2 F8		    loop L2
+ 000002AD  C6 06 30		    mov BYTE PTR [esi], '0'
+
+ 000002B0  EB 27		    jmp done
+
+ 000002B2			    skip:
+ 000002B2  39 1D 0000004B R	    cmp count, ebx; if count is the same as digits than the input is maxed out
+ 000002B8  7F 1F		    jg done
+ 000002BA  3C 30		    cmp al, 48 ; '0'
+ 000002BC  7C 1B		    jl done
+ 000002BE  3C 39		    cmp al, 57 ; '9'
+ 000002C0  7F 17		    jg done
+
+ 000002C2  FF 05 0000004B R	    inc count
+
+ 000002C8  BE 00000046 R	    mov esi, OFFSET buffer
+ 000002CD  8B CB		    mov ecx, ebx
+ 000002CF			    L1:
+ 000002CF  8A 5E 01		        mov bl, BYTE PTR [esi + 1]
+ 000002D2  88 1E		        mov BYTE PTR [esi], bl
+ 000002D4  46			        inc esi
+ 000002D5  E2 F8		    loop L1
+ 000002D7  88 06		    mov BYTE PTR [esi], al
+
+ 000002D9			    done:
+ 000002D9  E8 FFFFFD5E		    call print_buffer
+ 000002DE			    opError1:
+				    ret
+ 000002DE  5A		   *	    pop    edx
+ 000002DF  5B		   *	    pop    ebx
+ 000002E0  58		   *	    pop    eax
+ 000002E1  C3		   *	    ret    00000h
+ 000002E2			update ENDP
+
+				; // this will save the buffer and clear it when user press operation
+ 000002E2			save_buffer PROC uses eax ebx edx
+ 000002E2  50		   *	    push   eax
+ 000002E3  53		   *	    push   ebx
+ 000002E4  52		   *	    push   edx
+				    .IF op_error == 1 ; after error you can't do any more operation unless you input something
+ 000002E5  80 3D 0000005C R
+	   01		   *	    cmp    op_error, 001h
+ 000002EC  75 07	   *	    jne    @C0028
+ 000002EE  E9 0000008D		        jmp already
+				    .ELSEIF _add == 1 || _sub == 1 || _mul == 1 || _div == 1
+ 000002F3  EB 53	   *	    jmp    @C002A
+ 000002F5		   *@C0028:
+ 000002F5  80 3D 00000058 R
+	   01		   *	    cmp    _add, 001h
+ 000002FC  74 1B	   *	    je	@C002C
+ 000002FE  80 3D 00000059 R
+	   01		   *	    cmp    _sub, 001h
+ 00000305  74 12	   *	    je	@C002C
+ 00000307  80 3D 0000005A R
+	   01		   *	    cmp    _mul, 001h
+ 0000030E  74 09	   *	    je	@C002C
+ 00000310  80 3D 0000005B R
+	   01		   *	    cmp    _div, 001h
+ 00000317  75 2F	   *	    jne    @C002B
+ 00000319		   *@C002C:
+				        .IF f_temp1 == 1
+ 00000319  80 3D 0000005D R
+	   01		   *	    cmp    f_temp1, 001h
+ 00000320  75 0E	   *	    jne    @C0030
+ 00000322  E8 FFFFFDAE		            call clear_flags
+ 00000327  E8 FFFFFD70		            call set_flag
+ 0000032C  EB 52		            jmp already ; this means that the buffer is already saved and user decided to do another operation instead
+				        .ELSE
+ 0000032E  EB 18	   *	    jmp    @C0032
+ 00000330		   *@C0030:
+ 00000330  E8 00000091		            call operate
+ 00000335  E8 FFFFFD9B		            call clear_flags
+ 0000033A  E8 FFFFFD5D		            call set_flag
+ 0000033F  C6 05 0000005D R	            mov f_temp1, 1
+	   01
+ 00000346  EB 38		            jmp already
+				        .ENDIF
+				    .ENDIF
+ 00000348		   *@C0032:
+ 00000348		   *@C002B:
+ 00000348		   *@C002A:
+
+ 00000348  E8 FFFFFD4F		    call set_flag
+				    
+ 0000034D  BE 00000046 R	    mov esi, OFFSET buffer ; src
+ 00000352  BF 0000004F R	    mov edi, OFFSET save ; dest
+ 00000357  B9 00000004		    mov ecx, digits
+				    
+ 0000035C			    L3: ; this loop will copy all the buffer string and save it, at the same time clearing the buffer
+ 0000035C  8A 06		        mov al, BYTE PTR [esi]
+ 0000035E  C6 06 30		        mov BYTE PTR [esi], '0'
+ 00000361  88 07		        mov BYTE PTR [edi], al
+
+ 00000363  46			        inc esi
+ 00000364  47			        inc edi
+ 00000365  E2 F5		    loop L3
+
+ 00000367  A1 0000004B R	    mov eax, count ; saving the count
+ 0000036C  C7 05 0000004B R	    mov count, 0
+	   00000000
+ 00000376  A3 00000054 R	    mov save_count, eax
+
+ 0000037B  E8 FFFFFCD5		    call print_save
+ 00000380			    already:
+				    ret
+ 00000380  5A		   *	    pop    edx
+ 00000381  5B		   *	    pop    ebx
+ 00000382  58		   *	    pop    eax
+ 00000383  C3		   *	    ret    00000h
+ 00000384			save_buffer ENDP
+
+				; // This will clear everthing you doing
+ 00000384			refresh PROC
+ 00000384  E8 FFFFFD6F		    call clear_buffer
+ 00000389  E8 FFFFFD85		    call clear_save
+ 0000038E  E8 FFFFFD42		    call clear_flags
+ 00000393  E8 FFFFFD96		    call clear_y
+ 00000398  E8 FFFFFDA2		    call clear_res
+
+ 0000039D  C6 05 0000005C R	    mov op_error, 0
+	   00
+ 000003A4  C6 05 0000005D R	    mov f_temp1, 1
+	   01
+ 000003AB  C6 05 0000005E R	    mov f_temp2, 1
+	   01
+ 000003B2  C6 05 00000074 R	    mov carry, 0
+	   00
+ 000003B9  C6 05 00000075 R	    mov x, 0
+	   00
+
+ 000003C0  E8 FFFFFC77		    call print_buffer
+ 000003C5  C3			    ret
+ 000003C6			refresh ENDP
+
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; /////////////////////////////////////// MATH PARTS ///////////////////////////////////////////
+				; //////////////////////////////////////////////////////////////////////////////////////////////
+				; // this function will determine which operation to do
+ 000003C6			operate PROC uses eax ebx edx
+ 000003C6  50		   *	    push   eax
+ 000003C7  53		   *	    push   ebx
+ 000003C8  52		   *	    push   edx
+				    .IF op_error == 1
+ 000003C9  80 3D 0000005C R
+	   01		   *	    cmp    op_error, 001h
+ 000003D0  75 02	   *	    jne    @C0033
+ 000003D2  EB 3E		        jmp opError2
+				    ; .ELSEIF count == 0
+				        ; call copy_sb ; this is for 2 + = and 2 + 2 ===== case
+				    .ENDIF
+ 000003D4		   *@C0033:
+
+				    .IF _add == 1
+ 000003D4  80 3D 00000058 R
+	   01		   *	    cmp    _add, 001h
+ 000003DB  75 07	   *	    jne    @C0035
+ 000003DD  E8 00000034		        call addition
+				    .ELSEIF _sub == 1
+ 000003E2  EB 2E	   *	    jmp    @C0037
+ 000003E4		   *@C0035:
+ 000003E4  80 3D 00000059 R
+	   01		   *	    cmp    _sub, 001h
+ 000003EB  75 07	   *	    jne    @C0038
+ 000003ED  E8 00000080		        call subtraction
+				    .ELSEIF _mul == 1
+ 000003F2  EB 1E	   *	    jmp    @C003A
+ 000003F4		   *@C0038:
+ 000003F4  80 3D 0000005A R
+	   01		   *	    cmp    _mul, 001h
+ 000003FB  75 07	   *	    jne    @C003B
+ 000003FD  E8 000000C8		        call multiplication
+				    .ELSEIF _div == 1
+ 00000402  EB 0E	   *	    jmp    @C003D
+ 00000404		   *@C003B:
+ 00000404  80 3D 0000005B R
+	   01		   *	    cmp    _div, 001h
+ 0000040B  75 05	   *	    jne    @C003E
+ 0000040D  E8 000001E2		        call division
+				    .ENDIF
+ 00000412		   *@C003E:
+ 00000412		   *@C003D:
+ 00000412		   *@C003A:
+ 00000412		   *@C0037:
+ 00000412			    opError2:
+				    ret
+ 00000412  5A		   *	    pop    edx
+ 00000413  5B		   *	    pop    ebx
+ 00000414  58		   *	    pop    eax
+ 00000415  C3		   *	    ret    00000h
+ 00000416			operate ENDP
+
+				; // Add Function
+ 00000416			addition PROC
+ 00000416  B9 00000004		    mov ecx, digits ; total size of buffer
+
+ 0000041B  49			    dec ecx
+ 0000041C  BE 00000046 R	    mov esi, OFFSET buffer
+ 00000421  03 F1		    add esi, ecx ; this will point the esi to the last element of buffer
+ 00000423  BF 0000004F R	    mov edi, OFFSET save
+ 00000428  03 F9		    add edi, ecx ; this will point the edi to the last element of save
+
+ 0000042A  C7 05 00000054 R	    mov save_count, 0
+	   00000000
+
+ 00000434  41			    inc ecx
+ 00000435  F8			    clc
+ 00000436  66| 9C		    pushf
+ 00000438			    L5:
+ 00000438  66| 9D		        popf
+ 0000043A  B4 00		        mov ah,  0
+ 0000043C  8A 06		        mov al, BYTE PTR [esi] ; ascii digit
+ 0000043E  14 00		        adc al, 0
+ 00000440  02 07		        add al, BYTE PTR [edi]
+ 00000442  37			        aaa ; ascii to unpack
+ 00000443  66| 9C		        pushf
+ 00000445  66| 0D 3030		        or ax, 3030h ; this will change to ascii digit
+ 00000449  88 07		        mov BYTE PTR [edi], al ; save the addition
+				        
+ 0000044B  FF 05 00000054 R	        inc save_count
+ 00000451  4E			        dec esi
+ 00000452  4F			        dec edi
+ 00000453  E2 E3		    loop L5
+ 00000455  66| 9D		    popf
+ 00000457  72 0C		    jc carry1
+ 00000459  E8 FFFFFBF7		        call print_save
+ 0000045E  E8 FFFFFC95		        call clear_buffer
+ 00000463  EB 0C		        jmp add_done
+ 00000465			    carry1:
+ 00000465  C6 05 0000005C R	        mov op_error, 1
+	   01
+ 0000046C  E8 FFFFFBFD		        call print_error
+ 00000471			    add_done:
+ 00000471  C3			    ret
+ 00000472			addition ENDP
+
+				; // Sub Function
+ 00000472			subtraction PROC
+ 00000472  B9 00000004		    mov ecx, digits ; total size of buffer
+
+ 00000477  49			    dec ecx
+ 00000478  BE 00000046 R	    mov esi, OFFSET buffer
+ 0000047D  03 F1		    add esi, ecx ; this will point the esi to the last element of buffer
+ 0000047F  BF 0000004F R	    mov edi, OFFSET save
+ 00000484  03 F9		    add edi, ecx ; this will point the edi to the last element of save
+
+ 00000486  C7 05 00000054 R	    mov save_count, 0
+	   00000000
+
+ 00000490  41			    inc ecx
+ 00000491  F8			    clc
+ 00000492  66| 9C		    pushf ; this is to prevent pop nothing in the loop for first time
+ 00000494			    L8:
+ 00000494  66| 9D		        popf ; restore the carry flag
+ 00000496  8A 07		        mov al, BYTE PTR [edi]
+ 00000498  1C 00		        sbb al, 0 ; save - carry flag
+ 0000049A  2A 06		        sub al, BYTE PTR [esi] ; save - buffer
+ 0000049C  66| 9C		        pushf ; save the carry flag
+ 0000049E  3F			        aas ; will give you the result of subtraction in unpacked
+ 0000049F  0C 30		        or al, 30h
+ 000004A1  88 07		        mov BYTE PTR [edi], al ; save the result
+
+ 000004A3  FF 05 00000054 R	        inc save_count
+ 000004A9  4E			        dec esi
+ 000004AA  4F			        dec edi
+ 000004AB  E2 E7		    loop L8
+ 000004AD  66| 9D		    popf ; popping after the last loop
+ 000004AF  72 0C		    jc carry2
+ 000004B1  E8 FFFFFB9F		        call print_save
+ 000004B6  E8 FFFFFC3D		        call clear_buffer
+ 000004BB  EB 0C		        jmp sub_done
+ 000004BD			    carry2:
+ 000004BD  C6 05 0000005C R	        mov op_error, 1
+	   01
+ 000004C4  E8 FFFFFBA5		        call print_error
+ 000004C9			    sub_done:
+ 000004C9  C3			    ret
+ 000004CA			subtraction ENDP
+
+				; // Mul Function
+ 000004CA			multiplication PROC
+ 000004CA  A1 00000054 R	    mov eax, save_count
+ 000004CF  03 05 0000004B R	    add eax, count
+				    .IF eax > digits + 1
+ 000004D5  83 F8 05	   *	    cmp    eax, digits + 001h
+ 000004D8  76 05	   *	    jbe    @C0040
+ 000004DA  E9 000000A1		        jmp carry3
+				    .ENDIF
+ 000004DF		   *@C0040:
+ 000004DF  B9 00000004		    mov ecx, digits ; total size of buffer
+
+ 000004E4  49			    dec ecx
+ 000004E5  BE 00000046 R	    mov esi, OFFSET buffer
+ 000004EA  03 F1		    add esi, ecx ; this will point the esi to the last element of buffer
+ 000004EC  BF 0000004F R	    mov edi, OFFSET save
+ 000004F1  03 F9		    add edi, ecx ; this will point the edi to the last element of save
+ 000004F3  BA 00000076 R	    mov edx, OFFSET y
+ 000004F8  03 D1		    add edx, ecx ; this will point the edx to the last element of y
+
+ 000004FA  41			    inc ecx
+ 000004FB			    L10: ; save * buffer
+				        .IF op_error == 1
+ 000004FB  80 3D 0000005C R
+	   01		   *	    cmp    op_error, 001h
+ 00000502  75 02	   *	    jne    @C0042
+ 00000504  EB 7A		            jmp carry3
+				        .ENDIF
+ 00000506		   *@C0042:
+
+ 00000506  51			        push ecx
+ 00000507  57			        push edi
+ 00000508  52			        push edx
+
+ 00000509  8A 06		        mov al, BYTE PTR [esi] ; this is last save
+ 0000050B  24 0F		        and al, 0Fh; you will get unpack
+ 0000050D  B9 00000004		        mov ecx, digits
+ 00000512  C6 05 00000074 R	        mov carry, 0 ; empty the carry first
+	   00
+
+ 00000519			        L11:
+ 00000519  50			            push eax
+ 0000051A  8A 1F		            mov bl, BYTE PTR [edi]
+ 0000051C  80 E3 0F		            and bl, 0Fh; you will get unpack
+ 0000051F  F6 E3		            mul bl
+ 00000521  D4 0A		            aam ; you will get unpacked in ax
+
+ 00000523  88 25 00000075 R	            mov x, ah ; 10th digit
+ 00000529  B4 00		            mov ah, 00h
+
+ 0000052B  0C 30		            or al, 30h ; change it to ascii
+ 0000052D  80 0D 00000074 R	            or carry, 30h ; change the carry into ascii
+	   30
+ 00000534  02 05 00000074 R	            add al, carry ; add the two ascii
+ 0000053A  37			            aaa ; you will get unpack in ax
+ 0000053B  02 25 00000075 R	            add ah, x ; add 10th digit back
+ 00000541  C6 05 00000075 R	            mov x, 0 ; empty the x back
+	   00
+
+ 00000548  88 25 00000074 R	            mov carry, ah ; the carry in unpack
+ 0000054E  88 02		            mov BYTE PTR [edx], al
+ 00000550  4F			            dec edi
+ 00000551  4A			            dec edx
+ 00000552  58			            pop eax
+ 00000553  E2 C4		        loop L11 ; save loop
+
+ 00000555  E8 00000033		        call add_yr ; this will add the y came from the inner loop into the res (unpacks)
+ 0000055A  5A			        pop edx
+ 0000055B  5F			        pop edi
+ 0000055C  59			        pop ecx
+ 0000055D  4E			        dec esi
+ 0000055E  E2 9B		    loop L10 ; buffer loop
+
+ 00000560  E8 FFFFFBF5		    call copy_rs ; this will copy unpack res to ascii save
+ 00000565  E8 FFFFFBD5		    call clear_res ; clear the res for next use
+ 0000056A  E8 FFFFFBBF		    call clear_y
+
+ 0000056F  E8 FFFFFAE1		    call print_save
+ 00000574  E8 FFFFFC33		    call update_save_count
+ 00000579  E8 FFFFFB7A		    call clear_buffer
+ 0000057E  EB 0C		    jmp mul_done
+ 00000580			    carry3:
+ 00000580  C6 05 0000005C R	        mov op_error, 1
+	   01
+ 00000587  E8 FFFFFAE2		        call print_error
+ 0000058C			    mul_done:
+ 0000058C  C3			    ret
+ 0000058D			multiplication ENDP
+
+				; // this function will add the two unpacks and if carry then add the carry into the next
+				; // al will have the unpack
+ 0000058D			add_yr PROC uses eax ecx edx esi edi
+ 0000058D  50		   *	    push   eax
+ 0000058E  51		   *	    push   ecx
+ 0000058F  52		   *	    push   edx
+ 00000590  56		   *	    push   esi
+ 00000591  57		   *	    push   edi
+				    .IF carry > 0
+ 00000592  80 3D 00000074 R
+	   00		   *	    cmp    carry, 000h
+ 00000599  76 02	   *	    jbe    @C0044
+ 0000059B  EB 4A		        jmp carry4
+				    .ENDIF
+ 0000059D		   *@C0044:
+ 0000059D  B9 00000004		    mov ecx, digits ; total size of y
+ 000005A2  49			    dec ecx
+ 000005A3  BE 00000076 R	    mov esi, OFFSET y
+ 000005A8  03 F1		    add esi, ecx ; this will point the esi to the last element of y
+
+ 000005AA  2B 0D 00000065 R	    sub ecx, temp_count
+ 000005B0  BF 0000007B R	    mov edi, OFFSET res
+ 000005B5  03 F9		    add edi, ecx ; this will point the edi to the subtracted element of res
+
+ 000005B7  41			    inc ecx
+ 000005B8  F8			    clc
+ 000005B9  66| 9C		    pushf
+ 000005BB			    L15:
+ 000005BB  B4 00		        mov ah,  0
+ 000005BD  8A 06		        mov al, BYTE PTR [esi] ; unpack
+ 000005BF  0C 30		        or al, 30h ; ascii
+ 000005C1  66| 9D		        popf
+ 000005C3  14 00		        adc al, 0
+ 000005C5  8A 1F		        mov bl, BYTE PTR [edi] ; unpack
+ 000005C7  80 CB 30		        or bl, 30h ; ascii
+ 000005CA  02 C3		        add al, bl
+ 000005CC  F8			        clc ; to prevent carry from or
+ 000005CD  37			        aaa ; to unpack
+ 000005CE  66| 9C		        pushf
+ 000005D0  88 07		        mov BYTE PTR [edi], al ; save the addition
+				        
+ 000005D2  4E			        dec esi
+ 000005D3  4F			        dec edi
+ 000005D4  E2 E5		    loop L15
+ 000005D6  66| 9D		    popf
+ 000005D8  72 0D		    jc carry4
+ 000005DA  E8 FFFFFB4F		    call clear_y ; clear y
+ 000005DF  FF 05 00000065 R	    inc temp_count
+
+ 000005E5  EB 07		    jmp add_yr_done
+ 000005E7			    carry4:
+ 000005E7  C6 05 0000005C R	        mov op_error, 1
+	   01
+ 000005EE			    add_yr_done:
+				    ret
+ 000005EE  5F		   *	    pop    edi
+ 000005EF  5E		   *	    pop    esi
+ 000005F0  5A		   *	    pop    edx
+ 000005F1  59		   *	    pop    ecx
+ 000005F2  58		   *	    pop    eax
+ 000005F3  C3		   *	    ret    00000h
+ 000005F4			add_yr ENDP
+
+				; // Div Function only works for 4 digits
+ 000005F4			division PROC
+ 000005F4  E8 00000035		    call div_zero ; check if its divide by zero
+				    .IF op_error == 1
+ 000005F9  80 3D 0000005C R
+	   01		   *	    cmp    op_error, 001h
+ 00000600  75 02	   *	    jne    @C0046
+ 00000602  EB 24		        jmp carry5
+				    .ENDIF
+ 00000604		   *@C0046:
+
+ 00000604  E8 0000005F		    call change_unpack ; return unpack buffer in ebx, unpack save in edx
+ 00000609  E8 000000A6		    call change_hex ; return hex buffer in ebx, hex save in edx
+ 0000060E  8B C2		    mov eax, edx ; dividend
+
+ 00000610  BA 00000000		    mov edx, 0
+ 00000615  F7 F3		    div ebx
+
+ 00000617  E8 000000D1		    call change_ascii ; edx:eax = remainder:quotient hex to ascii in save
+
+ 0000061C  E8 FFFFFA34		    call print_save
+ 00000621  E8 FFFFFAD2		    call clear_buffer
+ 00000626  EB 05		    jmp div_done
+ 00000628			    carry5:
+ 00000628  E8 FFFFFA41		        call print_error
+ 0000062D			    div_done:
+ 0000062D  C3			    ret
+ 0000062E			division ENDP
+
+				; // check divide by zero
+ 0000062E			div_zero PROC
+ 0000062E  BE 00000046 R	    mov esi, OFFSET buffer
+ 00000633  B9 00000000		    mov ecx, 0
+
+ 00000638			    L16:
+ 00000638  83 F9 04		        cmp ecx, digits
+ 0000063B  74 13		        jz _L16
+
+ 0000063D  8A 04 0E		        mov al, BYTE PTR [esi + ecx]
+				        .IF al != '0'
+ 00000640  3C 30	   *	    cmp    al, '0'
+ 00000642  74 09	   *	    je	@C0048
+ 00000644  C6 05 0000005E R	            mov f_temp2, 0 ; non zero
+	   00
+ 0000064B  EB 03		            jmp _L16
+				        .ENDIF
+ 0000064D		   *@C0048:
+ 0000064D  41			        inc ecx
+ 0000064E  EB E8		        jmp L16
+ 00000650			    _L16:
+				    .IF f_temp2 == 1
+ 00000650  80 3D 0000005E R
+	   01		   *	    cmp    f_temp2, 001h
+ 00000657  75 07	   *	    jne    @C004A
+ 00000659  C6 05 0000005C R	        mov op_error, 1
+	   01
+				    .ENDIF
+ 00000660		   *@C004A:
+ 00000660  C6 05 0000005E R	    mov f_temp2, 1
+	   01
+ 00000667  C3			    ret
+ 00000668			div_zero ENDP
+
+				; return unpack buffer in ebx, unpack save in edx
+ 00000668			change_unpack PROC
+ 00000668  BE 00000046 R	    mov esi, OFFSET buffer
+ 0000066D  BF 0000004F R	    mov edi, OFFSET save
+ 00000672  B9 00000000		    mov ecx, 0
+ 00000677  BB 00000000		    mov ebx, 0 ; buffer
+ 0000067C  BA 00000000		    mov edx, 0 ; save
+ 00000681			    L17:
+ 00000681  83 F9 04		        cmp ecx, digits
+ 00000684  74 2D		        jz _L17
+
+ 00000686  B8 00000000		        mov eax, 0
+ 0000068B  8A 06		        mov al, BYTE PTR [esi]
+ 0000068D  04 30		        add al, '0'
+ 0000068F  37			        aaa ; ascii to unpack
+ 00000690  8A D8		        mov bl, al
+				        .IF ecx < digits - 1
+ 00000692  83 F9 03	   *	    cmp    ecx, digits - 001h
+ 00000695  73 03	   *	    jae    @C004C
+ 00000697  C1 E3 08		            shl ebx, 8 ; shift 1 BYTE
+				        .ENDIF
+ 0000069A		   *@C004C:
+
+ 0000069A  B8 00000000		        mov eax, 0
+ 0000069F  8A 07		        mov al, BYTE PTR [edi]
+ 000006A1  04 30		        add al, '0'
+ 000006A3  37			        aaa ; ascii to unpack
+ 000006A4  8A D0		        mov dl, al
+				        .IF ecx < digits - 1
+ 000006A6  83 F9 03	   *	    cmp    ecx, digits - 001h
+ 000006A9  73 03	   *	    jae    @C004E
+ 000006AB  C1 E2 08		            shl edx, 8 ; shift 1 BYTE
+				        .ENDIF
+ 000006AE		   *@C004E:
+
+ 000006AE  46			        inc esi
+ 000006AF  47			        inc edi
+ 000006B0  41			        inc ecx
+ 000006B1  EB CE		        jmp L17
+ 000006B3			    _L17:
+ 000006B3  C3			    ret
+ 000006B4			change_unpack ENDP
+
+				; return hex buffer in ebx, hex save in edx
+ 000006B4			change_hex PROC
+ 000006B4  8B C2		    mov eax, edx
+ 000006B6  50			    push eax ; unpack save
+ 000006B7  50			    push eax ; unpack save
+ 000006B8  8B C3		    mov eax, ebx
+ 000006BA  50			    push eax ; unpack buffer
+ 000006BB  C1 E8 10		    shr eax, 16 ; first 2 unpacks in ax
+ 000006BE  D5 0A		    aad ; unpack to hex
+ 000006C0  B9 00000064		    mov ecx, 100
+ 000006C5  F7 E1		    mul ecx
+ 000006C7  8B D8		    mov ebx, eax ; move it to ebx
+
+ 000006C9  58			    pop eax ; unpack buffer
+ 000006CA  25 0000FFFF		    and eax, 0000FFFFh
+ 000006CF  D5 0A		    aad ; unpack to hex
+ 000006D1  03 D8		    add ebx, eax ; ebx is now hex buffer
+
+ 000006D3  58			    pop eax ; unpack save
+ 000006D4  C1 E8 10		    shr eax, 16 ; first 2 unpacks in ax
+ 000006D7  D5 0A		    aad ; unpack to hex
+ 000006D9  B9 00000064		    mov ecx, 100
+ 000006DE  F7 E1		    mul ecx
+ 000006E0  8B D0		    mov edx, eax ; move it to edx
+
+ 000006E2  58			    pop eax ; unpack save
+ 000006E3  25 0000FFFF		    and eax, 0000FFFFh
+ 000006E8  D5 0A		    aad ; unpack to hex
+ 000006EA  03 D0		    add edx, eax ; edx is now hex save
+ 000006EC  C3			    ret
+ 000006ED			change_hex ENDP
+
+				; edx:eax = remainder:quotient hex to ascii in save
+ 000006ED			change_ascii PROC
+ 000006ED  BE 0000004F R	    mov esi, OFFSET save
+
+ 000006F2  BA 00000000		    mov edx, 0
+ 000006F7  BB 000003E8		    mov ebx, 1000
+ 000006FC  F7 F3		    div ebx
+ 000006FE  0C 30		    or al, 30h
+ 00000700  88 06		    mov BYTE PTR [esi], al
+ 00000702  46			    inc esi
+
+ 00000703  8B C2		    mov eax, edx ; change quotient with remainder
+ 00000705  BA 00000000		    mov edx, 0
+ 0000070A  BB 00000064		    mov ebx, 100
+ 0000070F  F7 F3		    div ebx
+ 00000711  0C 30		    or al, 30h
+ 00000713  88 06		    mov BYTE PTR [esi], al
+ 00000715  46			    inc esi
+
+ 00000716  8B C2		    mov eax, edx ; change quotient with remainder
+ 00000718  BA 00000000		    mov edx, 0
+ 0000071D  BB 0000000A		    mov ebx, 10
+ 00000722  F7 F3		    div ebx
+ 00000724  0C 30		    or al, 30h
+ 00000726  88 06		    mov BYTE PTR [esi], al
+ 00000728  46			    inc esi
+
+ 00000729  8B C2		    mov eax, edx ; change quotient with remainder
+ 0000072B  BA 00000000		    mov edx, 0
+ 00000730  BB 00000001		    mov ebx, 1
+ 00000735  F7 F3		    div ebx
+ 00000737  0C 30		    or al, 30h
+ 00000739  88 06		    mov BYTE PTR [esi], al
+ 0000073B  46			    inc esi
+
+ 0000073C  E8 FFFFFA6B		    call update_save_count
+ 00000741  C3			    ret
+ 00000742			change_ascii ENDP
+
+				; // Operator
+ 00000742			operate_calculator PROC
+ 00000742  E8 FFFFF8B9		    call print_calculator
+ 00000747  E8 FFFFFAA4		    call user_input
+ 0000074C  C3			    ret
+ 0000074D			operate_calculator ENDP
+
+ 0000074D			main PROC
+ 0000074D  E8 FFFFFFF0		    call operate_calculator
+
+				    INVOKE ExitProcess, 0
+ 00000752  6A 00	   *	    push   +000000000h
+ 00000754  E8 00000000 E   *	    call   ExitProcess
+ 00000759			main ENDP
+				END main
+Microsoft (R) Macro Assembler Version 14.35.32217.1	    04/28/23 00:29:49
+main.asm						     Symbols 2 - 1
+
+
+
+
+Structures and Unions:
+
+                N a m e                  Size
+                                         Offset      Type
+
+CONSOLE_CURSOR_INFO  . . . . . .	 00000008
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  bVisible . . . . . . . . . . .	 00000004	 DWord
+CONSOLE_SCREEN_BUFFER_INFO . . .	 00000016
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  dwCursorPosition . . . . . . .	 00000004	 DWord
+  wAttributes  . . . . . . . . .	 00000008	 Word
+  srWindow . . . . . . . . . . .	 0000000A	 QWord
+  dwMaximumWindowSize  . . . . .	 00000012	 DWord
+COORD  . . . . . . . . . . . . .	 00000004
+  X  . . . . . . . . . . . . . .	 00000000	 Word
+  Y  . . . . . . . . . . . . . .	 00000002	 Word
+FILETIME . . . . . . . . . . . .	 00000008
+  loDateTime . . . . . . . . . .	 00000000	 DWord
+  hiDateTime . . . . . . . . . .	 00000004	 DWord
+FOCUS_EVENT_RECORD . . . . . . .	 00000004
+  bSetFocus  . . . . . . . . . .	 00000000	 DWord
+FPU_ENVIRON  . . . . . . . . . .	 0000001C
+  controlWord  . . . . . . . . .	 00000000	 Word
+  statusWord . . . . . . . . . .	 00000004	 Word
+  tagWord  . . . . . . . . . . .	 00000008	 Word
+  instrPointerOffset . . . . . .	 0000000C	 DWord
+  instrPointerSelector . . . . .	 00000010	 DWord
+  operandPointerOffset . . . . .	 00000014	 DWord
+  operandPointerSelector . . . .	 00000018	 Word
+INPUT_RECORD . . . . . . . . . .	 00000014
+  EventType  . . . . . . . . . .	 00000000	 Word
+  Event  . . . . . . . . . . . .	 00000004	 XmmWord
+  bKeyDown . . . . . . . . . . .	 00000000	 DWord
+  wRepeatCount . . . . . . . . .	 00000004	 Word
+  wVirtualKeyCode  . . . . . . .	 00000006	 Word
+  wVirtualScanCode . . . . . . .	 00000008	 Word
+  uChar  . . . . . . . . . . . .	 0000000A	 Word
+  UnicodeChar  . . . . . . . . .	 00000000	 Word
+  AsciiChar  . . . . . . . . . .	 00000000	 Byte
+  dwControlKeyState  . . . . . .	 0000000C	 DWord
+  dwMousePosition  . . . . . . .	 00000000	 DWord
+  dwButtonState  . . . . . . . .	 00000004	 DWord
+  dwMouseControlKeyState . . . .	 00000008	 DWord
+  dwEventFlags . . . . . . . . .	 0000000C	 DWord
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+  dwCommandId  . . . . . . . . .	 00000000	 DWord
+  bSetFocus  . . . . . . . . . .	 00000000	 DWord
+KEY_EVENT_RECORD . . . . . . . .	 00000010
+  bKeyDown . . . . . . . . . . .	 00000000	 DWord
+  wRepeatCount . . . . . . . . .	 00000004	 Word
+  wVirtualKeyCode  . . . . . . .	 00000006	 Word
+  wVirtualScanCode . . . . . . .	 00000008	 Word
+  uChar  . . . . . . . . . . . .	 0000000A	 Word
+  UnicodeChar  . . . . . . . . .	 00000000	 Word
+  AsciiChar  . . . . . . . . . .	 00000000	 Byte
+  dwControlKeyState  . . . . . .	 0000000C	 DWord
+MENU_EVENT_RECORD  . . . . . . .	 00000004
+  dwCommandId  . . . . . . . . .	 00000000	 DWord
+MOUSE_EVENT_RECORD . . . . . . .	 00000010
+  dwMousePosition  . . . . . . .	 00000000	 DWord
+  dwButtonState  . . . . . . . .	 00000004	 DWord
+  dwMouseControlKeyState . . . .	 00000008	 DWord
+  dwEventFlags . . . . . . . . .	 0000000C	 DWord
+SMALL_RECT . . . . . . . . . . .	 00000008
+  Left . . . . . . . . . . . . .	 00000000	 Word
+  Top  . . . . . . . . . . . . .	 00000002	 Word
+  Right  . . . . . . . . . . . .	 00000004	 Word
+  Bottom . . . . . . . . . . . .	 00000006	 Word
+SYSTEMTIME . . . . . . . . . . .	 00000010
+  wYear  . . . . . . . . . . . .	 00000000	 Word
+  wMonth . . . . . . . . . . . .	 00000002	 Word
+  wDayOfWeek . . . . . . . . . .	 00000004	 Word
+  wDay . . . . . . . . . . . . .	 00000006	 Word
+  wHour  . . . . . . . . . . . .	 00000008	 Word
+  wMinute  . . . . . . . . . . .	 0000000A	 Word
+  wSecond  . . . . . . . . . . .	 0000000C	 Word
+  wMilliseconds  . . . . . . . .	 0000000E	 Word
+WINDOW_BUFFER_SIZE_RECORD  . . .	 00000004
+  dwSize . . . . . . . . . . . .	 00000000	 DWord
+
+
+Segments and Groups:
+
+                N a m e                 Size     Length   Align   Combine Class
+
+FLAT . . . . . . . . . . . . . .	GROUP
+STACK  . . . . . . . . . . . . .	32 Bit	 00001000 Para	  Stack	  'STACK'	 
+_DATA  . . . . . . . . . . . . .	32 Bit	 00000080 Para	  Public  'DATA'	
+_TEXT  . . . . . . . . . . . . .	32 Bit	 00000759 Para	  Public  'CODE'	
+
+
+Procedures, parameters, and locals:
+
+                N a m e                 Type     Value    Attr
+
+CloseFile  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CloseHandle  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Clrscr . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CreateFileA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+CreateOutputFile . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Crlf . . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Delay  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+DumpMem  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+DumpRegs . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ExitProcess  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FileTimeToDosDateTime  . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FileTimeToSystemTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FlushConsoleInputBuffer  . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+FormatMessageA . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetCommandLineA  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetCommandTail . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleCP . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleCursorInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleMode . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetConsoleScreenBufferInfo . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetDateTime  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetFileTime  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetKeyState  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetLastError . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetLocalTime . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetMaxXY . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetMseconds  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetNumberOfConsoleInputEvents  .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetProcessHeap . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetStdHandle . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetSystemTime  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetTextColor . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+GetTickCount . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Gotoxy . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapAlloc  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapCreate . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapDestroy  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapFree . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+HeapSize . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+IsDigit  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+LocalFree  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MessageBoxA  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MsgBoxAsk  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+MsgBox . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+OpenInputFile  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ParseDecimal32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ParseInteger32 . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+PeekConsoleInputA  . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Random32 . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+RandomRange  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Randomize  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadChar . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadConsoleA . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadConsoleInputA  . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadDec  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFile . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFloat  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadFromFile . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadHex  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadInt  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadKeyFlush . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadKey  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ReadString . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleCursorInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleCursorPosition . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleMode . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleScreenBufferSize . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleTextAttribute  . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleTitleA . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetConsoleWindowInfo . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetFilePointer . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetLocalTime . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SetTextColor . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+ShowFPUStack . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Sleep  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+StrLength  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_compare  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_copy . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_length . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_trim . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+Str_ucase  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+SystemTimeToFileTime . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WaitMsg  . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteBinB  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteBin . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteChar  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleA  . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleOutputAttribute  . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteConsoleOutputCharacterA . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteDec . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteFile  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteFloat . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteHexB  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteHex . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteInt . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteStackFrameName  . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteStackFrame  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteString  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteToFile  . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+WriteWindowsMsg  . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External STDCALL
+add_yr . . . . . . . . . . . . .	P Near	 0000058D _TEXT	Length= 00000067 Public STDCALL
+  L15  . . . . . . . . . . . . .	L Near	 000005BB _TEXT	
+  carry4 . . . . . . . . . . . .	L Near	 000005E7 _TEXT	
+  add_yr_done  . . . . . . . . .	L Near	 000005EE _TEXT	
+addition . . . . . . . . . . . .	P Near	 00000416 _TEXT	Length= 0000005C Public STDCALL
+  L5 . . . . . . . . . . . . . .	L Near	 00000438 _TEXT	
+  carry1 . . . . . . . . . . . .	L Near	 00000465 _TEXT	
+  add_done . . . . . . . . . . .	L Near	 00000471 _TEXT	
+change_ascii . . . . . . . . . .	P Near	 000006ED _TEXT	Length= 00000055 Public STDCALL
+change_hex . . . . . . . . . . .	P Near	 000006B4 _TEXT	Length= 00000039 Public STDCALL
+change_unpack  . . . . . . . . .	P Near	 00000668 _TEXT	Length= 0000004C Public STDCALL
+  L17  . . . . . . . . . . . . .	L Near	 00000681 _TEXT	
+  _L17 . . . . . . . . . . . . .	L Near	 000006B3 _TEXT	
+clear_buffer . . . . . . . . . .	P Near	 000000F8 _TEXT	Length= 0000001B Public STDCALL
+  L6 . . . . . . . . . . . . . .	L Near	 00000102 _TEXT	
+clear_flags  . . . . . . . . . .	P Near	 000000D5 _TEXT	Length= 00000023 Public STDCALL
+clear_res  . . . . . . . . . . .	P Near	 0000013F _TEXT	Length= 0000001B Public STDCALL
+  L13  . . . . . . . . . . . . .	L Near	 00000149 _TEXT	
+clear_save . . . . . . . . . . .	P Near	 00000113 _TEXT	Length= 0000001B Public STDCALL
+  L7 . . . . . . . . . . . . . .	L Near	 0000011D _TEXT	
+clear_y  . . . . . . . . . . . .	P Near	 0000012E _TEXT	Length= 00000011 Public STDCALL
+  L12  . . . . . . . . . . . . .	L Near	 00000138 _TEXT	
+copy_rs  . . . . . . . . . . . .	P Near	 0000015A _TEXT	Length= 0000002E Public STDCALL
+  L14  . . . . . . . . . . . . .	L Near	 00000173 _TEXT	
+copy_sb  . . . . . . . . . . . .	P Near	 00000188 _TEXT	Length= 00000024 Public STDCALL
+  L9 . . . . . . . . . . . . . .	L Near	 000001A3 _TEXT	
+div_zero . . . . . . . . . . . .	P Near	 0000062E _TEXT	Length= 0000003A Public STDCALL
+  L16  . . . . . . . . . . . . .	L Near	 00000638 _TEXT	
+  _L16 . . . . . . . . . . . . .	L Near	 00000650 _TEXT	
+division . . . . . . . . . . . .	P Near	 000005F4 _TEXT	Length= 0000003A Public STDCALL
+  carry5 . . . . . . . . . . . .	L Near	 00000628 _TEXT	
+  div_done . . . . . . . . . . .	L Near	 0000062D _TEXT	
+main . . . . . . . . . . . . . .	P Near	 0000074D _TEXT	Length= 0000000C Public STDCALL
+multiplication . . . . . . . . .	P Near	 000004CA _TEXT	Length= 000000C3 Public STDCALL
+  L10  . . . . . . . . . . . . .	L Near	 000004FB _TEXT	
+  L11  . . . . . . . . . . . . .	L Near	 00000519 _TEXT	
+  carry3 . . . . . . . . . . . .	L Near	 00000580 _TEXT	
+  mul_done . . . . . . . . . . .	L Near	 0000058C _TEXT	
+operate_calculator . . . . . . .	P Near	 00000742 _TEXT	Length= 0000000B Public STDCALL
+operate  . . . . . . . . . . . .	P Near	 000003C6 _TEXT	Length= 00000050 Public STDCALL
+  opError2 . . . . . . . . . . .	L Near	 00000412 _TEXT	
+print_buffer . . . . . . . . . .	P Near	 0000003C _TEXT	Length= 00000019 Public STDCALL
+print_calculator . . . . . . . .	P Near	 00000000 _TEXT	Length= 0000003C Public STDCALL
+print_error  . . . . . . . . . .	P Near	 0000006E _TEXT	Length= 00000019 Public STDCALL
+print_save . . . . . . . . . . .	P Near	 00000055 _TEXT	Length= 00000019 Public STDCALL
+print_space  . . . . . . . . . .	P Near	 00000087 _TEXT	Length= 00000015 Public STDCALL
+printf . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+refresh  . . . . . . . . . . . .	P Near	 00000384 _TEXT	Length= 00000042 Public STDCALL
+save_buffer  . . . . . . . . . .	P Near	 000002E2 _TEXT	Length= 000000A2 Public STDCALL
+  L3 . . . . . . . . . . . . . .	L Near	 0000035C _TEXT	
+  already  . . . . . . . . . . .	L Near	 00000380 _TEXT	
+scanf  . . . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+set_flag . . . . . . . . . . . .	P Near	 0000009C _TEXT	Length= 00000039 Public STDCALL
+subtraction  . . . . . . . . . .	P Near	 00000472 _TEXT	Length= 00000058 Public STDCALL
+  L8 . . . . . . . . . . . . . .	L Near	 00000494 _TEXT	
+  carry2 . . . . . . . . . . . .	L Near	 000004BD _TEXT	
+  sub_done . . . . . . . . . . .	L Near	 000004C9 _TEXT	
+update_save_count  . . . . . . .	P Near	 000001AC _TEXT	Length= 00000044 Public STDCALL
+  L18  . . . . . . . . . . . . .	L Near	 000001C0 _TEXT	
+update . . . . . . . . . . . . .	P Near	 00000243 _TEXT	Length= 0000009F Public STDCALL
+  L2 . . . . . . . . . . . . . .	L Near	 000002A5 _TEXT	
+  skip . . . . . . . . . . . . .	L Near	 000002B2 _TEXT	
+  L1 . . . . . . . . . . . . . .	L Near	 000002CF _TEXT	
+  done . . . . . . . . . . . . .	L Near	 000002D9 _TEXT	
+  opError1 . . . . . . . . . . .	L Near	 000002DE _TEXT	
+user_input . . . . . . . . . . .	P Near	 000001F0 _TEXT	Length= 00000053 Public STDCALL
+  L1 . . . . . . . . . . . . . .	L Near	 000001F5 _TEXT	
+wsprintfA  . . . . . . . . . . .	P Near	 00000000 FLAT	Length= 00000000 External C
+
+
+Symbols:
+
+                N a m e                 Type     Value    Attr
+
+@CodeSize  . . . . . . . . . . .	Number	 00000000h   
+@DataSize  . . . . . . . . . . .	Number	 00000000h   
+@Interface . . . . . . . . . . .	Number	 00000003h   
+@Model . . . . . . . . . . . . .	Number	 00000007h   
+@code  . . . . . . . . . . . . .	Text   	 _TEXT
+@data  . . . . . . . . . . . . .	Text   	 FLAT
+@fardata?  . . . . . . . . . . .	Text   	 FLAT
+@fardata . . . . . . . . . . . .	Text   	 FLAT
+@stack . . . . . . . . . . . . .	Text   	 FLAT
+ALT_MASK . . . . . . . . . . . .	Number	 00000003h   
+CAPSLOCK_ON  . . . . . . . . . .	Number	 00000080h   
+CREATE_ALWAYS  . . . . . . . . .	Number	 00000002h   
+CREATE_NEW . . . . . . . . . . .	Number	 00000001h   
+CTRL_MASK  . . . . . . . . . . .	Number	 0000000Ch   
+CreateFile . . . . . . . . . . .	Text   	 CreateFileA
+DO_NOT_SHARE . . . . . . . . . .	Number	 00000000h   
+ENABLE_ECHO_INPUT  . . . . . . .	Number	 00000004h   
+ENABLE_LINE_INPUT  . . . . . . .	Number	 00000002h   
+ENABLE_MOUSE_INPUT . . . . . . .	Number	 00000010h   
+ENABLE_PROCESSED_INPUT . . . . .	Number	 00000001h   
+ENABLE_PROCESSED_OUTPUT  . . . .	Number	 00000001h   
+ENABLE_WINDOW_INPUT  . . . . . .	Number	 00000008h   
+ENABLE_WRAP_AT_EOL_OUTPUT  . . .	Number	 00000002h   
+ENHANCED_KEY . . . . . . . . . .	Number	 00000100h   
+FALSE  . . . . . . . . . . . . .	Number	 00000000h   
+FILE_APPEND_DATA . . . . . . . .	Number	 00000004h   
+FILE_ATTRIBUTE_ARCHIVE . . . . .	Number	 00000020h   
+FILE_ATTRIBUTE_COMPRESSED  . . .	Number	 00000800h   
+FILE_ATTRIBUTE_DEVICE  . . . . .	Number	 00000040h   
+FILE_ATTRIBUTE_DIRECTORY . . . .	Number	 00000010h   
+FILE_ATTRIBUTE_ENCRYPTED . . . .	Number	 00004000h   
+FILE_ATTRIBUTE_HIDDEN  . . . . .	Number	 00000002h   
+FILE_ATTRIBUTE_NORMAL  . . . . .	Number	 00000080h   
+FILE_ATTRIBUTE_NOT_CONTENT_INDEXED .	Number	 00002000h   
+FILE_ATTRIBUTE_OFFLINE . . . . .	Number	 00001000h   
+FILE_ATTRIBUTE_READONLY  . . . .	Number	 00000001h   
+FILE_ATTRIBUTE_REPARSE_POINT . .	Number	 00000400h   
+FILE_ATTRIBUTE_SPARSE_FILE . . .	Number	 00000200h   
+FILE_ATTRIBUTE_SYSTEM  . . . . .	Number	 00000004h   
+FILE_ATTRIBUTE_TEMPORARY . . . .	Number	 00000100h   
+FILE_BEGIN . . . . . . . . . . .	Number	 00000000h   
+FILE_CURRENT . . . . . . . . . .	Number	 00000001h   
+FILE_DELETE_CHILD  . . . . . . .	Number	 00000040h   
+FILE_END . . . . . . . . . . . .	Number	 00000002h   
+FILE_READ_DATA . . . . . . . . .	Number	 00000001h   
+FILE_SHARE_DELETE  . . . . . . .	Number	 00000004h   
+FILE_SHARE_READ  . . . . . . . .	Number	 00000001h   
+FILE_SHARE_WRITE . . . . . . . .	Number	 00000002h   
+FILE_WRITE_DATA  . . . . . . . .	Number	 00000002h   
+FOCUS_EVENT  . . . . . . . . . .	Number	 00000010h   
+FORMAT_MESSAGE_ALLOCATE_BUFFER .	Number	 00000100h   
+FORMAT_MESSAGE_FROM_SYSTEM . . .	Number	 00001000h   
+FormatMessage  . . . . . . . . .	Text   	 FormatMessageA
+GENERIC_ALL  . . . . . . . . . .	Number	 10000000h   
+GENERIC_EXECUTE  . . . . . . . .	Number	 20000000h   
+GENERIC_READ . . . . . . . . . .	Number	 -80000000h   
+GENERIC_WRITE  . . . . . . . . .	Number	 40000000h   
+GetCommandLine . . . . . . . . .	Text   	 GetCommandLineA
+HANDLE . . . . . . . . . . . . .	Text   	 DWORD
+HEAP_GENERATE_EXCEPTIONS . . . .	Number	 00000004h   
+HEAP_GROWABLE  . . . . . . . . .	Number	 00000002h   
+HEAP_NO_SERIALIZE  . . . . . . .	Number	 00000001h   
+HEAP_REALLOC_IN_PLACE_ONLY . . .	Number	 00000010h   
+HEAP_ZERO_MEMORY . . . . . . . .	Number	 00000008h   
+IDABORT  . . . . . . . . . . . .	Number	 00000003h   
+IDCANCEL . . . . . . . . . . . .	Number	 00000002h   
+IDCLOSE  . . . . . . . . . . . .	Number	 00000008h   
+IDCONTINUE . . . . . . . . . . .	Number	 0000000Bh   
+IDHELP . . . . . . . . . . . . .	Number	 00000009h   
+IDIGNORE . . . . . . . . . . . .	Number	 00000005h   
+IDNO . . . . . . . . . . . . . .	Number	 00000007h   
+IDOK . . . . . . . . . . . . . .	Number	 00000001h   
+IDRETRY  . . . . . . . . . . . .	Number	 00000004h   
+IDTIMEOUT  . . . . . . . . . . .	Number	 00007D00h   
+IDTRYAGAIN . . . . . . . . . . .	Number	 0000000Ah   
+IDYES  . . . . . . . . . . . . .	Number	 00000006h   
+INVALID_HANDLE_VALUE . . . . . .	Number	 -00000001h   
+KBDOWN_FLAG  . . . . . . . . . .	Number	 00000001h   
+KEY_EVENT  . . . . . . . . . . .	Number	 00000001h   
+KEY_MASKS  . . . . . . . . . . .	Number	 0000001Fh   
+LEFT_ALT_PRESSED . . . . . . . .	Number	 00000002h   
+LEFT_CTRL_PRESSED  . . . . . . .	Number	 00000008h   
+MB_ABORTRETRYIGNORE  . . . . . .	Number	 00000002h   
+MB_APPLMODAL . . . . . . . . . .	Number	 00000000h   
+MB_CANCELTRYCONTINUE . . . . . .	Number	 00000006h   
+MB_DEFBUTTON1  . . . . . . . . .	Number	 00000000h   
+MB_DEFBUTTON2  . . . . . . . . .	Number	 00000100h   
+MB_DEFBUTTON3  . . . . . . . . .	Number	 00000200h   
+MB_DEFBUTTON4  . . . . . . . . .	Number	 00000300h   
+MB_HELP  . . . . . . . . . . . .	Number	 00004000h   
+MB_ICONASTERISK  . . . . . . . .	Number	 00000040h   
+MB_ICONERROR . . . . . . . . . .	Number	 00000010h   
+MB_ICONEXCLAMATION . . . . . . .	Number	 00000030h   
+MB_ICONHAND  . . . . . . . . . .	Number	 00000010h   
+MB_ICONINFORMATION . . . . . . .	Number	 00000040h   
+MB_ICONQUESTION  . . . . . . . .	Number	 00000020h   
+MB_ICONSTOP  . . . . . . . . . .	Number	 00000010h   
+MB_ICONWARNING . . . . . . . . .	Number	 00000030h   
+MB_OKCANCEL  . . . . . . . . . .	Number	 00000001h   
+MB_OK  . . . . . . . . . . . . .	Number	 00000000h   
+MB_RETRYCANCEL . . . . . . . . .	Number	 00000005h   
+MB_SYSTEMMODAL . . . . . . . . .	Number	 00001000h   
+MB_TASKMODAL . . . . . . . . . .	Number	 00002000h   
+MB_USERICON  . . . . . . . . . .	Number	 00000080h   
+MB_YESNOCANCEL . . . . . . . . .	Number	 00000003h   
+MB_YESNO . . . . . . . . . . . .	Number	 00000004h   
+MENU_EVENT . . . . . . . . . . .	Number	 00000008h   
+MOUSE_EVENT  . . . . . . . . . .	Number	 00000002h   
+MessageBox . . . . . . . . . . .	Text   	 MessageBoxA
+NULL . . . . . . . . . . . . . .	Number	 00000000h   
+NUMLOCK_ON . . . . . . . . . . .	Number	 00000020h   
+OPEN_ALWAYS  . . . . . . . . . .	Number	 00000004h   
+OPEN_EXISTING  . . . . . . . . .	Number	 00000003h   
+PeekConsoleInput . . . . . . . .	Text   	 PeekConsoleInputA
+RIGHT_ALT_PRESSED  . . . . . . .	Number	 00000001h   
+RIGHT_CTRL_PRESSED . . . . . . .	Number	 00000004h   
+ReadConsoleInput . . . . . . . .	Text   	 ReadConsoleInputA
+ReadConsole  . . . . . . . . . .	Text   	 ReadConsoleA
+SCROLLLOCK_ON  . . . . . . . . .	Number	 00000040h   
+SHIFT_MASK . . . . . . . . . . .	Number	 00000010h   
+SHIFT_PRESSED  . . . . . . . . .	Number	 00000010h   
+STD_ERROR_HANDLE . . . . . . . .	Number	 -0000000Ch   
+STD_INPUT_HANDLE . . . . . . . .	Number	 -0000000Ah   
+STD_OUTPUT_HANDLE  . . . . . . .	Number	 -0000000Bh   
+SetConsoleTitle  . . . . . . . .	Text   	 SetConsoleTitleA
+TAB  . . . . . . . . . . . . . .	Number	 00000009h   
+TRUE . . . . . . . . . . . . . .	Number	 00000001h   
+TRUNCATE_EXISTING  . . . . . . .	Number	 00000005h   
+VK_11  . . . . . . . . . . . . .	Number	 000000BDh   
+VK_12  . . . . . . . . . . . . .	Number	 000000BBh   
+VK_ADD . . . . . . . . . . . . .	Number	 0000006Bh   
+VK_BACK  . . . . . . . . . . . .	Number	 00000008h   
+VK_CANCEL  . . . . . . . . . . .	Number	 00000003h   
+VK_CAPITAL . . . . . . . . . . .	Number	 00000014h   
+VK_CLEAR . . . . . . . . . . . .	Number	 0000000Ch   
+VK_CONTROL . . . . . . . . . . .	Number	 00000011h   
+VK_DECIMAL . . . . . . . . . . .	Number	 0000006Eh   
+VK_DELETE  . . . . . . . . . . .	Number	 0000002Eh   
+VK_DIVIDE  . . . . . . . . . . .	Number	 0000006Fh   
+VK_DOWN  . . . . . . . . . . . .	Number	 00000028h   
+VK_END . . . . . . . . . . . . .	Number	 00000023h   
+VK_ESCAPE  . . . . . . . . . . .	Number	 0000001Bh   
+VK_EXECUTE . . . . . . . . . . .	Number	 0000002Bh   
+VK_F10 . . . . . . . . . . . . .	Number	 00000079h   
+VK_F11 . . . . . . . . . . . . .	Number	 0000007Ah   
+VK_F12 . . . . . . . . . . . . .	Number	 0000007Bh   
+VK_F13 . . . . . . . . . . . . .	Number	 0000007Ch   
+VK_F14 . . . . . . . . . . . . .	Number	 0000007Dh   
+VK_F15 . . . . . . . . . . . . .	Number	 0000007Eh   
+VK_F16 . . . . . . . . . . . . .	Number	 0000007Fh   
+VK_F17 . . . . . . . . . . . . .	Number	 00000080h   
+VK_F18 . . . . . . . . . . . . .	Number	 00000081h   
+VK_F19 . . . . . . . . . . . . .	Number	 00000082h   
+VK_F1  . . . . . . . . . . . . .	Number	 00000070h   
+VK_F20 . . . . . . . . . . . . .	Number	 00000083h   
+VK_F21 . . . . . . . . . . . . .	Number	 00000084h   
+VK_F22 . . . . . . . . . . . . .	Number	 00000085h   
+VK_F23 . . . . . . . . . . . . .	Number	 00000086h   
+VK_F24 . . . . . . . . . . . . .	Number	 00000087h   
+VK_F2  . . . . . . . . . . . . .	Number	 00000071h   
+VK_F3  . . . . . . . . . . . . .	Number	 00000072h   
+VK_F4  . . . . . . . . . . . . .	Number	 00000073h   
+VK_F5  . . . . . . . . . . . . .	Number	 00000074h   
+VK_F6  . . . . . . . . . . . . .	Number	 00000075h   
+VK_F7  . . . . . . . . . . . . .	Number	 00000076h   
+VK_F8  . . . . . . . . . . . . .	Number	 00000077h   
+VK_F9  . . . . . . . . . . . . .	Number	 00000078h   
+VK_HELP  . . . . . . . . . . . .	Number	 0000002Fh   
+VK_HOME  . . . . . . . . . . . .	Number	 00000024h   
+VK_INSERT  . . . . . . . . . . .	Number	 0000002Dh   
+VK_LBUTTON . . . . . . . . . . .	Number	 00000001h   
+VK_LCONTROL  . . . . . . . . . .	Number	 000000A2h   
+VK_LEFT  . . . . . . . . . . . .	Number	 00000025h   
+VK_LMENU . . . . . . . . . . . .	Number	 000000A4h   
+VK_LSHIFT  . . . . . . . . . . .	Number	 000000A0h   
+VK_MENU  . . . . . . . . . . . .	Number	 00000012h   
+VK_MULTIPLY  . . . . . . . . . .	Number	 0000006Ah   
+VK_NEXT  . . . . . . . . . . . .	Number	 00000022h   
+VK_NUMLOCK . . . . . . . . . . .	Number	 00000090h   
+VK_NUMPAD0 . . . . . . . . . . .	Number	 00000060h   
+VK_NUMPAD1 . . . . . . . . . . .	Number	 00000061h   
+VK_NUMPAD2 . . . . . . . . . . .	Number	 00000062h   
+VK_NUMPAD3 . . . . . . . . . . .	Number	 00000063h   
+VK_NUMPAD4 . . . . . . . . . . .	Number	 00000064h   
+VK_NUMPAD5 . . . . . . . . . . .	Number	 00000065h   
+VK_NUMPAD6 . . . . . . . . . . .	Number	 00000066h   
+VK_NUMPAD7 . . . . . . . . . . .	Number	 00000067h   
+VK_NUMPAD8 . . . . . . . . . . .	Number	 00000068h   
+VK_NUMPAD9 . . . . . . . . . . .	Number	 00000069h   
+VK_PAUSE . . . . . . . . . . . .	Number	 00000013h   
+VK_PRINT . . . . . . . . . . . .	Number	 0000002Ah   
+VK_PRIOR . . . . . . . . . . . .	Number	 00000021h   
+VK_RBUTTON . . . . . . . . . . .	Number	 00000002h   
+VK_RCONTROL  . . . . . . . . . .	Number	 000000A3h   
+VK_RETURN  . . . . . . . . . . .	Number	 0000000Dh   
+VK_RIGHT . . . . . . . . . . . .	Number	 00000027h   
+VK_RMENU . . . . . . . . . . . .	Number	 000000A5h   
+VK_RSHIFT  . . . . . . . . . . .	Number	 000000A1h   
+VK_SCROLL  . . . . . . . . . . .	Number	 00000091h   
+VK_SEPARATER . . . . . . . . . .	Number	 0000006Ch   
+VK_SHIFT . . . . . . . . . . . .	Number	 00000010h   
+VK_SNAPSHOT  . . . . . . . . . .	Number	 0000002Ch   
+VK_SPACE . . . . . . . . . . . .	Number	 00000020h   
+VK_SUBTRACT  . . . . . . . . . .	Number	 0000006Dh   
+VK_TAB . . . . . . . . . . . . .	Number	 00000009h   
+VK_UP  . . . . . . . . . . . . .	Number	 00000026h   
+WINDOW_BUFFER_SIZE_EVENT . . . .	Number	 00000004h   
+WriteConsoleOutputCharacter  . .	Text   	 WriteConsoleOutputCharacterA
+WriteConsole . . . . . . . . . .	Text   	 WriteConsoleA
+_add . . . . . . . . . . . . . .	Byte	 00000058 _DATA	
+_div . . . . . . . . . . . . . .	Byte	 0000005B _DATA	
+_mul . . . . . . . . . . . . . .	Byte	 0000005A _DATA	
+_sub . . . . . . . . . . . . . .	Byte	 00000059 _DATA	
+black  . . . . . . . . . . . . .	Number	 00000000h   
+blue . . . . . . . . . . . . . .	Number	 00000001h   
+brown  . . . . . . . . . . . . .	Number	 00000006h   
+buffer . . . . . . . . . . . . .	Byte	 00000046 _DATA	
+carry  . . . . . . . . . . . . .	Byte	 00000074 _DATA	
+count  . . . . . . . . . . . . .	DWord	 0000004B _DATA	
+cyan . . . . . . . . . . . . . .	Number	 00000003h   
+digits . . . . . . . . . . . . .	Number	 00000004h   
+error_text . . . . . . . . . . .	Byte	 0000005F _DATA	
+exit . . . . . . . . . . . . . .	Text   	 INVOKE ExitProcess,0
+f_temp1  . . . . . . . . . . . .	Byte	 0000005D _DATA	
+f_temp2  . . . . . . . . . . . .	Byte	 0000005E _DATA	
+gray . . . . . . . . . . . . . .	Number	 00000008h   
+green  . . . . . . . . . . . . .	Number	 00000002h   
+lightBlue  . . . . . . . . . . .	Number	 00000009h   
+lightCyan  . . . . . . . . . . .	Number	 0000000Bh   
+lightGray  . . . . . . . . . . .	Number	 00000007h   
+lightGreen . . . . . . . . . . .	Number	 0000000Ah   
+lightMagenta . . . . . . . . . .	Number	 0000000Dh   
+lightRed . . . . . . . . . . . .	Number	 0000000Ch   
+magenta  . . . . . . . . . . . .	Number	 00000005h   
+op_error . . . . . . . . . . . .	Byte	 0000005C _DATA	
+red  . . . . . . . . . . . . . .	Number	 00000004h   
+res  . . . . . . . . . . . . . .	Byte	 0000007B _DATA	
+row1 . . . . . . . . . . . . . .	Byte	 00000000 _DATA	
+row2 . . . . . . . . . . . . . .	Byte	 0000000E _DATA	
+row3 . . . . . . . . . . . . . .	Byte	 0000001C _DATA	
+row4 . . . . . . . . . . . . . .	Byte	 0000002A _DATA	
+row5 . . . . . . . . . . . . . .	Byte	 00000038 _DATA	
+save_count . . . . . . . . . . .	DWord	 00000054 _DATA	
+save . . . . . . . . . . . . . .	Byte	 0000004F _DATA	
+space_text . . . . . . . . . . .	Byte	 00000069 _DATA	
+temp_count . . . . . . . . . . .	DWord	 00000065 _DATA	
+white  . . . . . . . . . . . . .	Number	 0000000Fh   
+wsprintf . . . . . . . . . . . .	Text   	 wsprintfA
+x  . . . . . . . . . . . . . . .	Byte	 00000075 _DATA	
+yellow . . . . . . . . . . . . .	Number	 0000000Eh   
+y  . . . . . . . . . . . . . . .	Byte	 00000076 _DATA	
+
+	   1 Warnings
+	   0 Errors
